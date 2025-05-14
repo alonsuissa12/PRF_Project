@@ -9,71 +9,72 @@
 
 
 
-int main()
-{
+#include <iostream>
+#include <vector>
+#include <cstdlib>
+#include <ctime>
+#include <cmath>
+#include "PRF.h"
+#include "RO.h"
+#include "DIST.h"
 
-	srand(time(0));
+using namespace std;
+using uint = uint32_t;
 
-	// a single experiment
+int main() {
+    srand(static_cast<unsigned>(time(nullptr)));
+    const int N = 100000;
+    float c0 = 0, c1 = 0, d0 = 0, d1 = 0;
 
-	float c0 = 0, c1 = 0, d0 = 0, d1 = 0;
-	for (int i = 0; i < 100000; i++) {
+    for (int i = 0; i < N; i++) {
+        int choice = (rand() >> (i % 8)) & 1;
+        uint decision = 0;
+        DIST Distinguisher;
+        vector<uint> response;
 
-		int choice = (rand() >> (i % 8)) & 1;
-		uint decision;
+        if (choice == 0) {
+            c0++;
+            uint key = GRU();
+            PRF funcPRF(key);
+            uint x = 0;
+            int num_calls = 0;
 
-		DIST Distinguisher;
-		vector<uint> response;
+            while (true) {
+                num_calls++;
+                response = Distinguisher.work(x);
+                if (response[0] == 0) {
+                    if (num_calls > 32*2048) break;
+                    x = funcPRF.work(response[1]);
+                } else {
+                    decision = response[1];
+                    if (decision != 0) d0++;
+                    break;
+                }
+            }
+        } else {
+            c1++;
+            RO funcRO;
+            uint x = 0;
+            int num_calls = 0;
 
-		if (choice == 0) {
-			c0++;
-			uint key = GRU();
-			PRF funcPRF(key);
-			uint x = 0;
-			uint num_calls = 0;
-			while (true) {
-				num_calls++;
-				response = Distinguisher.work(x);
+            while (true) {
+                num_calls++;
+                response = Distinguisher.work(x);
+                if (response[0] == 0) {
+                    if (num_calls > 32*2048) break;
+                    x = funcRO.work(response[1]);
+                } else {
+                    decision = response[1];
+                    if (decision != 0) d1++;
+                    break;
+                }
+            }
+        }
+    }
 
-				if (response[0] == 0) {						//if the final decision is not made yet
-
-					// do not try to bruteforce, otherwise you'll be kicked out with a default result decision = 0.
-					if (num_calls > 32*2048)  break;
-
-					x = funcPRF.work(response[1]);
-				}
-				else {										//if this is the final decision of Distinguisher
-					decision = response[1];
-					if (decision != 0) d0++;
-					break;
-				};
-			}
-
-		}
-		else {
-
-			c1++;
-			RO funcRO;
-			uint x = 0;
-			int num_calls = 0;
-			while (true) {
-				num_calls++;
-				response = Distinguisher.work(x);
-				if (response[0] == 0) {
-					if (num_calls > 32*2048)  break;
-					x = funcRO.work(response[1]);
-				}
-				else {
-					decision = response[1];
-					if (decision != 0) d1++;
-					break;
-				};
-			}
-		};
-	};
-	float adv = abs(d0 / c0 - d1 / c1);
-	std::cout << "Advantage=" << adv << ", c0 = " << c0 << ", c1 = " << c1 << "\n";
-
-
+    float adv = fabs(d0 / c0 - d1 / c1);
+    cout << "Advantage = " << adv
+         << ", c0 = " << c0 << ", c1 = " << c1
+         << ", d0 = " << d0 << ", d1 = " << d1 << "\n";
+    return 0;
 }
-
